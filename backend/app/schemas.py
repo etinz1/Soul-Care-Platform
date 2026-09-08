@@ -119,6 +119,36 @@ class IntakeSubmitResponse(BaseModel):
     scripture_cards: list[ScriptureCard] = Field(default_factory=list)
 
 
+class IntakeCreateRequest(BaseModel):
+    client_id: UUID
+
+
+class IntakeDraftResponse(BaseModel):
+    intake_id: UUID
+    client_id: UUID
+    status: str
+
+
+class IntakeDetailResponse(BaseModel):
+    """
+    Role-scoped read (GET /intake/{id}). Deliberately narrower than the
+    full IntakeAssessment row: no PHQ-9/GAD-7 scores and no raw_responses
+    blob here, matching the same "don't over-expose clinical detail on a
+    general read" posture as ClientSummaryResponse in the CRM module —
+    those numeric scores are meant to inform the risk engine and a
+    clinician, not to be casually re-fetched by the coach view this
+    endpoint mostly serves.
+    """
+
+    intake_id: UUID
+    client_id: UUID
+    status: str
+    submitted_at: Optional[datetime] = None
+    distress_level: Optional[int] = None
+    presenting_concerns: list[str] = Field(default_factory=list)
+    protective_factors: list[str] = Field(default_factory=list)
+
+
 # --- Provider onboarding ---
 
 

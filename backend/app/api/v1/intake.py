@@ -20,6 +20,7 @@ from app.db import get_db_session
 from app.models import (
     ClinicalProvider,
     Client,
+    Coach,
     IntakeAssessment,
     IntakeStatus,
     Referral,
@@ -28,10 +29,91 @@ from app.models import (
     User,
     UserRole,
 )
-from app.schemas import IntakeSubmission, IntakeSubmitResponse, RiskDecision
+from app.schemas import (
+    IntakeCreateRequest,
+    IntakeDetailResponse,
+    IntakeDraftResponse,
+    IntakeSubmission,
+    IntakeSubmitResponse,
+    RiskDecision,
+)
 from app.services import risk_engine, scripture_engine
 
 router = APIRouter(prefix="/intake", tags=["intake"])
+
+
+@router.post("", response_model=IntakeDraftResponse, status_code=status.HTTP_201_CREATED)
+async def create_intake_draft(
+    payload: IntakeCreateRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a draft assessment to submit into. Kept intentionally minimal —
+    the real content only lands on submit (see submit_intake below)."""
+    client = await db.get(Client, payload.client_id)
+    if client is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
+    _authorize_submission(current_user, client)
+
+    intake = IntakeAssessment(client_id=payload.client_id, status=IntakeStatus.draft)
+    db.add(intake)
+    await db.flush()
+
+    await write_audit_log(
+        db,
+        actor_user_id=current_user.id,
+        action="intake.draft_created",
+        resource_type="intake_assessments",
+        resource_id=str(intake.id),
+        phi_accessed=False,
+    )
+    await db.commit()
+    return IntakeDraftResponse(intake_id=intake.id, client_id=intake.client_id, status=intake.status.value)
+
+
+@router.get("/{intake_id}", response_model=IntakeDetailResponse)
+async def get_intake(
+    intake_id: UUID,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+):
+    intake = await db.get(IntakeAssessment, intake_id)
+    if intake is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Intake assessment not found")
+
+    client = await db.get(Client, intake.client_id)
+    if client is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
+
+    is_self = current_user.role == UserRole.client and client.user_id == current_user.id
+    is_admin = current_user.role == UserRole.platform_admin
+    is_own_coach = False
+    if current_user.role == UserRole.coach:
+        coach = (await db.execute(select(Coach).where(Coach.user_id == current_user.id))).scalar_one_or_none()
+        is_own_coach = coach is not None and client.coach_id == coach.id
+
+    if not (is_self or is_admin or is_own_coach):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not permitted to view this intake assessment")
+
+    await write_audit_log(
+        db,
+        actor_user_id=current_user.id,
+        action="intake.viewed",
+        resource_type="intake_assessments",
+        resource_id=str(intake.id),
+        phi_accessed=True,
+    )
+    await db.commit()
+
+    return IntakeDetailResponse(
+        intake_id=intake.id,
+        client_id=intake.client_id,
+        status=intake.status.value,
+        submitted_at=intake.submitted_at,
+        distress_level=intake.distress_level,
+        presenting_concerns=intake.presenting_concerns or [],
+        protective_factors=intake.protective_factors or [],
+    )
 
 
 @router.post("/{intake_id}/submit", response_model=IntakeSubmitResponse)
