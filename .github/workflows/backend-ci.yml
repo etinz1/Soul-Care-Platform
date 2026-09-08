@@ -1,0 +1,85 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  workflow_dispatch: {}
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: soul_care
+          POSTGRES_PASSWORD: soul_care_dev_password
+          POSTGRES_DB: soul_care_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U soul_care"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://soul_care:soul_care_dev_password@localhost:5432/soul_care_test
+      REDIS_URL: redis://localhost:6379/1
+      JWT_SECRET_KEY: ci-only-secret-do-not-use-in-prod
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 20); do
+            pg_isready -h localhost -p 5432 -U soul_care && break
+            sleep 1
+          done
+
+      - name: Run Alembic migrations (upgrade/downgrade/upgrade round trip)
+        run: |
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+
+      - name: Run test suite
+        run: python -m pytest -q
+
+      - name: Verify app imports cleanly (catches router-wiring mistakes)
+        run: python -c "from app.main import app; print(f'{len(app.routes)} routes registered')"
