@@ -49,6 +49,10 @@ async def test_coach_sees_only_own_roster(client, db_session):
     assert roster.status_code == 200
     assert len(roster.json()) == 1
     assert roster.json()[0]["client_id"] == str(client_row.id)
+    # The roster carries the client's email so a coach caseload screen has
+    # something human-readable to show — ClientRosterEntry/ClientSummaryResponse
+    # otherwise expose no identifying detail at all.
+    assert roster.json()[0]["email"] == "client@example.com"
 
     empty_roster = await client.get("/api/v1/crm/clients", headers=_auth(other_coach_user))
     assert empty_roster.json() == []
@@ -67,6 +71,7 @@ async def test_summary_denied_to_unaffiliated_coach_and_client_role(client, db_s
 
     allowed = await client.get(f"/api/v1/crm/clients/{client_row.id}/summary", headers=_auth(coach_user))
     assert allowed.status_code == 200
+    assert allowed.json()["email"] == client_user.email
 
 
 async def test_summary_excludes_clinical_notes_and_scores(client, db_session):

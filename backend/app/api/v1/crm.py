@@ -80,9 +80,20 @@ async def list_my_clients(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Role not permitted to list CRM clients")
 
     clients = (await db.execute(stmt)).scalars().all()
+    if not clients:
+        return []
+
+    user_ids = [c.user_id for c in clients]
+    users_by_id = {
+        u.id: u for u in (await db.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()
+    }
     return [
         ClientRosterEntry(
-            client_id=c.id, coach_id=c.coach_id, church_sponsor_id=c.church_sponsor_id, created_at=c.created_at
+            client_id=c.id,
+            email=users_by_id[c.user_id].email if c.user_id in users_by_id else "",
+            coach_id=c.coach_id,
+            church_sponsor_id=c.church_sponsor_id,
+            created_at=c.created_at,
         )
         for c in clients
     ]
@@ -98,6 +109,8 @@ async def get_client_summary(
     if client is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
     await _authorize_coach_or_admin_for_client(db, current_user, client)
+
+    client_user = await db.get(User, client.user_id)
 
     latest_intake = (
         await db.execute(
@@ -169,6 +182,7 @@ async def get_client_summary(
 
     return ClientSummaryResponse(
         client_id=client.id,
+        email=client_user.email if client_user is not None else "",
         coach_id=client.coach_id,
         church_sponsor_id=client.church_sponsor_id,
         created_at=client.created_at,

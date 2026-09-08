@@ -118,3 +118,26 @@ async def test_accepting_referrals_forced_false_unless_approved(client, db_sessi
     )
     assert resp.status_code == 200
     assert resp.json()["accepting_referrals"] is False
+
+
+async def test_provider_can_fetch_own_profile_via_me(client):
+    """GET /providers/me lets a provider discover their own provider_id and
+    vetting status right after login, without already knowing provider_id —
+    the self-service equivalent of GET /clients/me."""
+    onboard = await client.post("/api/v1/providers/onboard", json=ONBOARD_PAYLOAD)
+    provider_id = onboard.json()["provider_id"]
+    access_token = onboard.json()["tokens"]["access_token"]
+
+    me = await client.get("/api/v1/providers/me", headers={"Authorization": f"Bearer {access_token}"})
+    assert me.status_code == 200, me.text
+    body = me.json()
+    assert body["provider_id"] == provider_id
+    assert body["email"] == ONBOARD_PAYLOAD["email"]
+    assert body["vetting_status"] == "pending"
+    assert body["accepting_referrals"] is False
+
+
+async def test_providers_me_rejected_for_non_provider_role(client, db_session):
+    admin = await _make_admin(db_session)
+    resp = await client.get("/api/v1/providers/me", headers=_auth_header(admin))
+    assert resp.status_code == 403

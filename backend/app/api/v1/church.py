@@ -130,6 +130,19 @@ async def create_church(
     return _church_to_response(church)
 
 
+@router.get("", response_model=list[ChurchResponse])
+async def list_churches(
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(UserRole.platform_admin)),
+):
+    """Admin-only: the full church directory, mirroring GET /providers for
+    the provider vetting queue. A church_admin already reaches their own
+    church implicitly through the sponsorship/invoice endpoints below and
+    has no listed use for browsing every church on the platform."""
+    churches = (await db.execute(select(Church))).scalars().all()
+    return [_church_to_response(c) for c in churches]
+
+
 @router.post("/sponsorships", response_model=SponsorshipResponse, status_code=status.HTTP_201_CREATED)
 async def create_sponsorship(
     payload: SponsorshipCreateRequest,

@@ -79,6 +79,22 @@ async def test_church_primary_contact_must_be_church_admin_role(client, db_sessi
     assert resp.status_code == 400
 
 
+async def test_list_churches_is_admin_only(client, db_session):
+    """GET /church is the admin-only directory the admin dashboard's invoice
+    and client-assignment screens use to pick a church, mirroring GET
+    /providers for the provider vetting queue."""
+    admin_user, church = await _make_church_admin_and_church(db_session)
+    platform_admin = await _make_user(db_session, "platform-admin@example.com", UserRole.platform_admin)
+
+    denied = await client.get("/api/v1/church", headers=_auth(admin_user))
+    assert denied.status_code == 403
+
+    allowed = await client.get("/api/v1/church", headers=_auth(platform_admin))
+    assert allowed.status_code == 200
+    names = [c["name"] for c in allowed.json()]
+    assert church.name in names
+
+
 # --- Sponsorships ---
 
 

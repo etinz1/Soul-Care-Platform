@@ -178,6 +178,7 @@ class ProviderOnboardResponse(BaseModel):
 
 class ProviderSummary(BaseModel):
     provider_id: UUID
+    email: str
     provider_type: str
     license_state: str
     vetting_status: str
@@ -526,11 +527,36 @@ class ClientAdminAssignRequest(BaseModel):
         return self
 
 
+# --- Coach provisioning (admin-only; there is no self-service coach signup) ---
+
+
+class CoachCreateRequest(BaseModel):
+    """
+    Admin-only coach account provisioning. Unlike clinical providers (who
+    self-onboard through a vetting workflow, see /providers/onboard) or
+    clients (who self-register), coaches have no public signup path per
+    RegisterRequest's docstring — an admin creates the account directly, the
+    same posture as church provisioning in ChurchCreateRequest.
+    """
+
+    email: EmailStr
+    password: str = Field(..., min_length=12)
+    bio: Optional[str] = None
+
+
+class CoachResponse(BaseModel):
+    coach_id: UUID
+    email: str
+    bio: Optional[str] = None
+    active: bool
+
+
 # --- Coaching CRM ---
 
 
 class ClientRosterEntry(BaseModel):
     client_id: UUID
+    email: str
     coach_id: Optional[UUID] = None
     church_sponsor_id: Optional[UUID] = None
     created_at: datetime
@@ -560,6 +586,7 @@ class ClientSummaryResponse(BaseModel):
     """
 
     client_id: UUID
+    email: str
     coach_id: Optional[UUID] = None
     church_sponsor_id: Optional[UUID] = None
     created_at: datetime

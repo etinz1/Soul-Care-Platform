@@ -91,6 +91,30 @@ async def onboard_provider(payload: ProviderOnboardRequest, db: AsyncSession = D
     )
 
 
+@router.get("/me", response_model=ProviderSummary)
+async def get_my_provider_profile(
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(UserRole.provider)),
+):
+    """Self-service equivalent of GET /clients/me — lets a provider find
+    their own provider_id and vetting/accepting-referrals status right
+    after login, without already knowing their provider_id."""
+    provider = (
+        await db.execute(select(ClinicalProvider).where(ClinicalProvider.user_id == current_user.id))
+    ).scalar_one_or_none()
+    if provider is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No provider profile found for this user")
+
+    return ProviderSummary(
+        provider_id=provider.id,
+        email=current_user.email,
+        provider_type=provider.provider_type.value,
+        license_state=provider.license_state,
+        vetting_status=provider.vetting_status.value,
+        accepting_referrals=provider.accepting_referrals,
+    )
+
+
 @router.get("/{provider_id}/vetting-status", response_model=ProviderSummary)
 async def get_vetting_status(
     provider_id: UUID,
@@ -106,8 +130,10 @@ async def get_vetting_status(
     if not (is_self or is_admin):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not permitted to view this provider")
 
+    provider_user = await db.get(User, provider.user_id)
     return ProviderSummary(
         provider_id=provider.id,
+        email=provider_user.email if provider_user is not None else "",
         provider_type=provider.provider_type.value,
         license_state=provider.license_state,
         vetting_status=provider.vetting_status.value,
@@ -126,9 +152,17 @@ async def list_providers(
     if vetting_status_filter is not None:
         stmt = stmt.where(ClinicalProvider.vetting_status == vetting_status_filter)
     providers = (await db.execute(stmt)).scalars().all()
+    if not providers:
+        return []
+
+    user_ids = [p.user_id for p in providers]
+    users_by_id = {
+        u.id: u for u in (await db.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()
+    }
     return [
         ProviderSummary(
             provider_id=p.id,
+            email=users_by_id[p.user_id].email if p.user_id in users_by_id else "",
             provider_type=p.provider_type.value,
             license_state=p.license_state,
             vetting_status=p.vetting_status.value,

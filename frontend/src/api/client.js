@@ -117,6 +117,8 @@ export const authApi = {
 export const clientsApi = {
   getMe: () => apiRequest("/api/v1/clients/me"),
   updateMe: (patch) => apiRequest("/api/v1/clients/me", { method: "PATCH", body: patch }),
+  // Admin-only: assign a coach and/or a sponsoring church to a client.
+  assign: (clientId, patch) => apiRequest(`/api/v1/clients/${clientId}/assignment`, { method: "PATCH", body: patch }),
 };
 
 // --- Intake ---
@@ -126,8 +128,60 @@ export const intakeApi = {
   submit: (intakeId, payload) => apiRequest(`/api/v1/intake/${intakeId}/submit`, { method: "POST", body: payload }),
 };
 
-// --- Scheduling / prayer / CRM reads (dashboard summary tiles) ---
+// --- Scheduling / prayer requests ---
 export const schedulingApi = {
   listSessions: () => apiRequest("/api/v1/scheduling/sessions"),
+  createSession: (payload) => apiRequest("/api/v1/scheduling/sessions", { method: "POST", body: payload }),
+  updateSession: (sessionId, patch) =>
+    apiRequest(`/api/v1/scheduling/sessions/${sessionId}`, { method: "PATCH", body: patch }),
+  listSessionNotes: (sessionId) => apiRequest(`/api/v1/scheduling/sessions/${sessionId}/notes`),
+  createSessionNote: (sessionId, payload) =>
+    apiRequest(`/api/v1/scheduling/sessions/${sessionId}/notes`, { method: "POST", body: payload }),
   listPrayerRequests: () => apiRequest("/api/v1/scheduling/prayer-requests"),
+  updatePrayerRequest: (prayerRequestId, patch) =>
+    apiRequest(`/api/v1/scheduling/prayer-requests/${prayerRequestId}`, { method: "PATCH", body: patch }),
+};
+
+// --- Coaching CRM (coach's own caseload; admin sees all) ---
+export const crmApi = {
+  listClients: () => apiRequest("/api/v1/crm/clients"),
+  getClientSummary: (clientId) => apiRequest(`/api/v1/crm/clients/${clientId}/summary`),
+  listNotes: (clientId) => apiRequest(`/api/v1/crm/clients/${clientId}/notes`),
+  addNote: (clientId, content) =>
+    apiRequest(`/api/v1/crm/clients/${clientId}/notes`, { method: "POST", body: { content } }),
+};
+
+// --- Clinical providers (vetting + self-service) ---
+export const providersApi = {
+  getMe: () => apiRequest("/api/v1/providers/me"),
+  // Admin-only vetting queue; pass "pending" to filter, or omit for all.
+  list: (vettingStatus) =>
+    apiRequest(`/api/v1/providers${vettingStatus ? `?vetting_status=${vettingStatus}` : ""}`),
+  updateVetting: (providerId, decision) =>
+    apiRequest(`/api/v1/providers/${providerId}/vetting`, { method: "PATCH", body: decision }),
+};
+
+// --- Coach provisioning (admin-only; no self-service coach signup) ---
+export const coachesApi = {
+  list: () => apiRequest("/api/v1/coaches"),
+  create: (payload) => apiRequest("/api/v1/coaches", { method: "POST", body: payload }),
+};
+
+// --- Referral marketplace ---
+export const referralsApi = {
+  list: () => apiRequest("/api/v1/referrals"),
+  respond: (referralId, decisionStatus) =>
+    apiRequest(`/api/v1/referrals/${referralId}/respond`, { method: "PATCH", body: { status: decisionStatus } }),
+};
+
+// --- Church directory + sponsorship/invoice visibility ---
+export const churchApi = {
+  list: () => apiRequest("/api/v1/church"),
+  create: (payload) => apiRequest("/api/v1/church", { method: "POST", body: payload }),
+};
+
+// --- Billing (admin creates; churches/clients read via churchApi-adjacent routes) ---
+export const billingApi = {
+  listInvoices: () => apiRequest("/api/v1/church/invoices"),
+  createInvoice: (payload) => apiRequest("/api/v1/billing/invoices", { method: "POST", body: payload }),
 };

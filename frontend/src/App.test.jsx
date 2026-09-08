@@ -67,4 +67,94 @@ describe("App — login flow", () => {
     await waitFor(() => expect(screen.getByText(/your profile/i)).toBeInTheDocument());
     expect(screen.getByRole("link", { name: /start intake/i })).toBeInTheDocument();
   });
+
+  it("logs in as a coach and reaches the coach dashboard", async () => {
+    const user = userEvent.setup();
+    const tokens = { access_token: fakeAccessToken("coach"), refresh_token: "refresh-coach", token_type: "bearer" };
+
+    vi.spyOn(global, "fetch").mockImplementation((url) => {
+      const path = String(url);
+      if (path.endsWith("/api/v1/auth/login")) return jsonResponse(tokens);
+      if (path.endsWith("/api/v1/crm/clients")) {
+        return jsonResponse([
+          {
+            client_id: "33333333-3333-3333-3333-333333333333",
+            email: "client-a@example.com",
+            coach_id: "44444444-4444-4444-4444-444444444444",
+            church_sponsor_id: null,
+            created_at: "2026-01-01T00:00:00",
+          },
+        ]);
+      }
+      if (path.endsWith("/api/v1/scheduling/sessions")) return jsonResponse([]);
+      if (path.endsWith("/api/v1/scheduling/prayer-requests")) return jsonResponse([]);
+      return jsonResponse({ detail: `unhandled path in test: ${path}` }, 404);
+    });
+
+    render(<App />);
+    await user.type(screen.getByLabelText(/email/i), "coach@example.com");
+    await user.type(screen.getByLabelText(/^password$/i), "correcthorsebattery");
+    await user.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => expect(screen.getByText(/your caseload/i)).toBeInTheDocument());
+    // The client's email appears both in the roster row and the "schedule a
+    // session" dropdown, so assert presence rather than a single match.
+    expect(screen.getAllByText(/client-a@example.com/i).length).toBeGreaterThan(0);
+  });
+
+  it("logs in as a provider and reaches the provider dashboard", async () => {
+    const user = userEvent.setup();
+    const tokens = { access_token: fakeAccessToken("provider"), refresh_token: "refresh-provider", token_type: "bearer" };
+
+    vi.spyOn(global, "fetch").mockImplementation((url) => {
+      const path = String(url);
+      if (path.endsWith("/api/v1/auth/login")) return jsonResponse(tokens);
+      if (path.endsWith("/api/v1/providers/me")) {
+        return jsonResponse({
+          provider_id: "55555555-5555-5555-5555-555555555555",
+          email: "provider@example.com",
+          provider_type: "psychiatrist",
+          license_state: "OK",
+          vetting_status: "approved",
+          accepting_referrals: true,
+        });
+      }
+      if (path.endsWith("/api/v1/referrals")) return jsonResponse([]);
+      if (path.endsWith("/api/v1/scheduling/sessions")) return jsonResponse([]);
+      return jsonResponse({ detail: `unhandled path in test: ${path}` }, 404);
+    });
+
+    render(<App />);
+    await user.type(screen.getByLabelText(/email/i), "provider@example.com");
+    await user.type(screen.getByLabelText(/^password$/i), "correcthorsebattery");
+    await user.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => expect(screen.getByText(/your provider profile/i)).toBeInTheDocument());
+    expect(screen.getByText(/psychiatrist/i)).toBeInTheDocument();
+  });
+
+  it("logs in as a platform admin and reaches the admin dashboard", async () => {
+    const user = userEvent.setup();
+    const tokens = { access_token: fakeAccessToken("platform_admin"), refresh_token: "refresh-admin", token_type: "bearer" };
+
+    vi.spyOn(global, "fetch").mockImplementation((url) => {
+      const path = String(url);
+      if (path.endsWith("/api/v1/auth/login")) return jsonResponse(tokens);
+      if (path.endsWith("/api/v1/providers")) return jsonResponse([]);
+      if (path.endsWith("/api/v1/coaches")) return jsonResponse([]);
+      if (path.endsWith("/api/v1/church")) return jsonResponse([]);
+      if (path.endsWith("/api/v1/crm/clients")) return jsonResponse([]);
+      if (path.endsWith("/api/v1/church/invoices")) return jsonResponse([]);
+      return jsonResponse({ detail: `unhandled path in test: ${path}` }, 404);
+    });
+
+    render(<App />);
+    await user.type(screen.getByLabelText(/email/i), "admin@example.com");
+    await user.type(screen.getByLabelText(/^password$/i), "correcthorsebattery");
+    await user.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => expect(screen.getByText(/provider vetting/i)).toBeInTheDocument());
+    expect(screen.getByText(/^coaches$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^churches$/i)).toBeInTheDocument();
+  });
 });

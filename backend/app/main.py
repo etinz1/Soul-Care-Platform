@@ -4,6 +4,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.billing import router as billing_router
 from app.api.v1.church import router as church_router
 from app.api.v1.clients import router as clients_router
+from app.api.v1.coaches import router as coaches_router
 from app.api.v1.consents import router as consents_router
 from app.api.v1.crm import router as crm_router
 from app.api.v1.intake import router as intake_router
@@ -25,6 +26,7 @@ app.include_router(prayer_requests_router, prefix="/api/v1")
 app.include_router(church_router, prefix="/api/v1")
 app.include_router(billing_router, prefix="/api/v1")
 app.include_router(crm_router, prefix="/api/v1")
+app.include_router(coaches_router, prefix="/api/v1")
 
 
 @app.get("/healthz")
