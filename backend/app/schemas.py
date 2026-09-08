@@ -225,3 +225,112 @@ class ReferralRespondRequest(BaseModel):
         if v not in ("accepted", "declined"):
             raise ValueError("status must be 'accepted' or 'declined'")
         return v
+
+
+# --- Scheduling: sessions ---
+
+
+class SessionCreateRequest(BaseModel):
+    client_id: UUID
+    session_type: str = Field(..., description="coaching | prayer | clinical")
+    scheduled_at: datetime
+
+    @field_validator("session_type")
+    @classmethod
+    def valid_session_type(cls, v):
+        if v not in ("coaching", "prayer", "clinical"):
+            raise ValueError("session_type must be one of coaching, prayer, clinical")
+        return v
+
+
+class SessionResponse(BaseModel):
+    session_id: UUID
+    client_id: UUID
+    coach_id: Optional[UUID] = None
+    provider_id: Optional[UUID] = None
+    session_type: str
+    scheduled_at: datetime
+    status: str
+
+
+class SessionUpdateRequest(BaseModel):
+    status: Optional[str] = Field(None, description="scheduled | completed | cancelled | no_show")
+    scheduled_at: Optional[datetime] = None
+
+    @field_validator("status")
+    @classmethod
+    def valid_status(cls, v):
+        if v is not None and v not in ("scheduled", "completed", "cancelled", "no_show"):
+            raise ValueError("status must be one of scheduled, completed, cancelled, no_show")
+        return v
+
+    @model_validator(mode="after")
+    def at_least_one_field(self):
+        if self.status is None and self.scheduled_at is None:
+            raise ValueError("Provide at least one of status or scheduled_at.")
+        return self
+
+
+class SessionNoteCreateRequest(BaseModel):
+    note_type: str = Field(..., description="spiritual_action_plan | progress | clinical")
+    content: str = Field(..., min_length=1, description="Note body; stored in encrypted_content")
+
+    @field_validator("note_type")
+    @classmethod
+    def valid_note_type(cls, v):
+        if v not in ("spiritual_action_plan", "progress", "clinical"):
+            raise ValueError("note_type must be one of spiritual_action_plan, progress, clinical")
+        return v
+
+
+class SessionNoteResponse(BaseModel):
+    note_id: UUID
+    session_id: UUID
+    note_type: str
+    content: str
+    created_by: UUID
+    created_at: datetime
+
+
+# --- Scheduling: prayer requests ---
+
+
+class PrayerRequestCreateRequest(BaseModel):
+    client_id: UUID
+    request_text: str = Field(..., min_length=1)
+    urgency: str = Field("routine", description="routine | urgent | immediate")
+
+    @field_validator("urgency")
+    @classmethod
+    def valid_urgency(cls, v):
+        if v not in ("routine", "urgent", "immediate"):
+            raise ValueError("urgency must be one of routine, urgent, immediate")
+        return v
+
+
+class PrayerRequestResponse(BaseModel):
+    prayer_request_id: UUID
+    client_id: UUID
+    request_text: str
+    urgency: str
+    assigned_to: Optional[UUID] = None
+    status: str
+    created_at: datetime
+
+
+class PrayerRequestUpdateRequest(BaseModel):
+    status: Optional[str] = Field(None, description="open | in_progress | closed")
+    assigned_to: Optional[UUID] = Field(None, description="Admin-only reassignment")
+
+    @field_validator("status")
+    @classmethod
+    def valid_prayer_status(cls, v):
+        if v is not None and v not in ("open", "in_progress", "closed"):
+            raise ValueError("status must be one of open, in_progress, closed")
+        return v
+
+    @model_validator(mode="after")
+    def at_least_one_prayer_field(self):
+        if self.status is None and self.assigned_to is None:
+            raise ValueError("Provide at least one of status or assigned_to.")
+        return self
