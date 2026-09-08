@@ -4,6 +4,7 @@ Password hashing and JWT issuance/validation.
 Kept separate from auth.py (FastAPI dependencies) so this module has no
 FastAPI/DB imports and is trivially unit-testable.
 """
+import hashlib
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -64,11 +65,24 @@ def decode_token(token: str) -> dict:
     return jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
 
 
+def hash_typed_signature(client_id: UUID, typed_name: str, scope: dict, signed_at: datetime) -> str:
+    """
+    Placeholder e-signature: hashes the attestation (typed legal name) together
+    with what was consented to and when, so the hash is tamper-evident even
+    though it isn't a real digital-signature certificate. See
+    ConsentCreateRequest's docstring — replace with a real e-signature vendor
+    before collecting real ROI consent.
+    """
+    canonical = f"{client_id}|{typed_name.strip().lower()}|{sorted(scope.items())}|{signed_at.isoformat()}"
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 __all__ = [
     "hash_password",
     "verify_password",
     "create_access_token",
     "create_refresh_token",
     "decode_token",
+    "hash_typed_signature",
     "JWTError",
 ]

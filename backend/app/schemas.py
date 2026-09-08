@@ -12,7 +12,7 @@ from enum import Enum
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
 # --- Auth ---
@@ -117,3 +117,111 @@ class IntakeSubmitResponse(BaseModel):
     submitted_at: datetime
     risk_decision: RiskDecision
     scripture_cards: list[ScriptureCard] = Field(default_factory=list)
+
+
+# --- Provider onboarding ---
+
+
+class ProviderOnboardRequest(BaseModel):
+    """
+    Public self-service onboarding for clinical providers. Unlike client
+    /auth/register, this does NOT grant network membership on its own — it
+    creates the account plus a `pending` ClinicalProvider row. A platform
+    admin must review and approve (PATCH /providers/{id}/vetting) before the
+    provider can receive referrals. See SECURITY_GRC_BLUEPRINT.md §4.
+    """
+
+    email: EmailStr
+    password: str = Field(..., min_length=12)
+    provider_type: str = Field(..., description="psychiatrist | licensed_counselor | addiction_specialist")
+    license_number: str = Field(..., min_length=1)
+    license_state: str = Field(..., min_length=2, max_length=2)
+    npi_number: Optional[str] = None
+
+
+class ProviderOnboardResponse(BaseModel):
+    provider_id: UUID
+    vetting_status: str
+    accepting_referrals: bool
+    tokens: TokenResponse
+
+
+class ProviderSummary(BaseModel):
+    provider_id: UUID
+    provider_type: str
+    license_state: str
+    vetting_status: str
+    accepting_referrals: bool
+
+
+# --- ROI consent ---
+
+
+class ConsentCreateRequest(BaseModel):
+    """
+    A lightweight typed e-signature for the MVP: the client types their full
+    legal name as an attestation, which is hashed together with the scope
+    and timestamp into `signature_hash`. This is a placeholder — a real
+    e-signature vendor (e.g. HelloSign/DocuSign with an audit certificate)
+    should replace it before real ROI documents are collected; see
+    README.md's pre-launch caveats.
+    """
+
+    client_id: UUID
+    discloses_to_provider_id: Optional[UUID] = None
+    discloses_to_church_id: Optional[UUID] = None
+    scope: dict = Field(default_factory=dict, description='e.g. {"clinical_summary": true}')
+    typed_signature_name: str = Field(..., min_length=2)
+    expires_in_days: int = Field(90, ge=1, le=365)
+
+    @model_validator(mode="after")
+    def exactly_one_disclosure_target(self):
+        # field_validator alone would not fire here: pydantic v2 skips
+        # per-field validation on defaulted (omitted) fields unless
+        # validate_default=True, and both targets are optional-with-default.
+        # A model validator always runs regardless of which fields were
+        # actually supplied in the payload.
+        if bool(self.discloses_to_church_id) == bool(self.discloses_to_provider_id):
+            raise ValueError("Consent must disclose to exactly one of provider or church, not both or neither.")
+        return self
+
+
+class ConsentResponse(BaseModel):
+    consent_id: UUID
+    client_id: UUID
+    discloses_to_provider_id: Optional[UUID] = None
+    discloses_to_church_id: Optional[UUID] = None
+    scope: dict
+    signed_at: datetime
+    expires_at: Optional[datetime] = None
+    revoked_at: Optional[datetime] = None
+
+
+# --- Referrals ---
+
+
+class ReferralCreateRequest(BaseModel):
+    client_id: UUID
+    provider_id: UUID
+    consent_id: UUID
+    referral_type: str = Field("standard", description="standard | urgent")
+
+
+class ReferralResponse(BaseModel):
+    referral_id: UUID
+    client_id: UUID
+    provider_id: UUID
+    referral_type: str
+    status: str
+    created_at: datetime
+
+
+class ReferralRespondRequest(BaseModel):
+    status: str = Field(..., description="accepted | declined")
+
+    @field_validator("status")
+    @classmethod
+    def valid_status(cls, v):
+        if v not in ("accepted", "declined"):
+            raise ValueError("status must be 'accepted' or 'declined'")
+        return v
