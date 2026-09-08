@@ -4,6 +4,15 @@ Auth endpoints: register (client self-signup only), login, refresh, logout.
 Every successful login/refresh is audit-logged (AU-2/CC7.2 — see
 docs/SECURITY_GRC_BLUEPRINT.md) since authentication events are exactly the
 kind of activity a HIPAA-adjacent audit trail needs to reconstruct.
+
+Registration creates the `User` AND its `Client` profile row atomically —
+every other module (intake, referrals, consents, scheduling, prayer
+requests, church sponsorship, CRM) is keyed off `Client.id`, not `User.id`,
+so a client with no `Client` row is unable to use any of them. This
+mirrors providers.py's onboarding, which likewise creates `User` +
+`ClinicalProvider` together. See api/v1/clients.py for the self-service
+profile-completion and admin coach/church-assignment endpoints that build
+on top of the row created here.
 """
 from uuid import UUID
 
@@ -14,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import write_audit_log
 from app.auth import get_current_user
 from app.db import get_db_session
-from app.models import User, UserRole
+from app.models import Client, User, UserRole
 from app.redis_client import allow_refresh_token, is_refresh_token_allowed, revoke_refresh_token
 from app.schemas import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse
 from app.security import (
@@ -42,7 +51,21 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_s
     )
     db.add(user)
     await db.flush()
+
+    client_row = Client(user_id=user.id)
+    db.add(client_row)
+    await db.flush()
+
     tokens = await _issue_tokens(db, user)
+
+    await write_audit_log(
+        db,
+        actor_user_id=user.id,
+        action="auth.register",
+        resource_type="clients",
+        resource_id=str(client_row.id),
+        phi_accessed=False,
+    )
     await db.commit()
     return tokens
 

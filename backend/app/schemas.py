@@ -454,6 +454,48 @@ class InvoiceResponse(BaseModel):
     issued_at: datetime
 
 
+# --- Client profile ---
+
+
+class ClientProfileResponse(BaseModel):
+    client_id: UUID
+    user_id: UUID
+    coach_id: Optional[UUID] = None
+    church_sponsor_id: Optional[UUID] = None
+    date_of_birth: Optional[str] = None
+    emergency_contact: Optional[str] = None
+    created_at: datetime
+
+
+class ClientProfileUpdateRequest(BaseModel):
+    """Self-service fields only — a client can fill in their own profile
+    details, but cannot assign themselves a coach or a sponsoring church
+    (see ClientAdminAssignRequest, which is admin-only)."""
+
+    date_of_birth: Optional[str] = None
+    emergency_contact: Optional[str] = None
+
+    @model_validator(mode="after")
+    def at_least_one_profile_field(self):
+        if self.date_of_birth is None and self.emergency_contact is None:
+            raise ValueError("Provide at least one of date_of_birth or emergency_contact.")
+        return self
+
+
+class ClientAdminAssignRequest(BaseModel):
+    """Admin-only: assigning a coach or a sponsoring church is an
+    operational decision, not something a client can grant themselves."""
+
+    coach_id: Optional[UUID] = None
+    church_sponsor_id: Optional[UUID] = None
+
+    @model_validator(mode="after")
+    def at_least_one_assignment_field(self):
+        if self.coach_id is None and self.church_sponsor_id is None:
+            raise ValueError("Provide at least one of coach_id or church_sponsor_id.")
+        return self
+
+
 # --- Coaching CRM ---
 
 

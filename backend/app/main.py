@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.api.v1.auth import router as auth_router
 from app.api.v1.billing import router as billing_router
 from app.api.v1.church import router as church_router
+from app.api.v1.clients import router as clients_router
 from app.api.v1.consents import router as consents_router
 from app.api.v1.crm import router as crm_router
 from app.api.v1.intake import router as intake_router
@@ -14,6 +15,7 @@ from app.api.v1.scheduling_sessions import router as scheduling_sessions_router
 app = FastAPI(title="Soul Care Platform API", version="0.1.0")
 
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(clients_router, prefix="/api/v1")
 app.include_router(intake_router, prefix="/api/v1")
 app.include_router(providers_router, prefix="/api/v1")
 app.include_router(consents_router, prefix="/api/v1")
