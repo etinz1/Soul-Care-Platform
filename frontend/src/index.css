@@ -1,3 +1,7 @@
+/* Bold display serif for the brand headline treatment (login/register hero,
+   NavBar wordmark) — see tailwind.config.js's `display` font family. */
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,600&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
