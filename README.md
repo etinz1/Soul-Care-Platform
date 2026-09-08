@@ -4,7 +4,7 @@ A HIPAA-ready SaaS platform for Christian mental health coaches — smart intake
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full system design (stack, DB schema, API routing, cloud infra) and [`docs/SECURITY_GRC_BLUEPRINT.md`](docs/SECURITY_GRC_BLUEPRINT.md) for the control mapping to NIST 800-53 / SOC 2 / ISO 27001.
 
-**Status:** early MVP scaffold. Implemented so far: Smart Intake & Risk Assessment (the "Recognize" module, including the Safe-T/ACT hard-stop routing and substance-abuse referral logic), Auth/RBAC with JWT + refresh-token rotation, and the provider-vetting endpoint demonstrating role-based access control end to end. Every module below has been run and tested against a live Postgres + Redis, not just written.
+**Status:** all 8 modules in ARCHITECTURE.md §7's suggested MVP build sequence are implemented: Auth/RBAC (JWT + refresh-token rotation), Smart Intake & Risk Assessment ("Recognize" — Safe-T/ACT hard-stop routing, substance-abuse referral logic), Scripture Automation, Provider Onboarding & Vetting, ROI Consent + Referral Marketplace ("Refer"), Scheduling & Prayer-Request Routing, Church Sponsorship & Billing (including a real HMAC-SHA256-verified Stripe webhook), and the Coaching CRM. 63 tests pass against a live Postgres + Redis, and every module has also been exercised against the real dev server, not just the test suite — see "Important caveats" below for what's still missing before any of this touches real client data.
 
 ## Stack
 
@@ -99,3 +99,6 @@ docs/
 - The emergency-consent pattern in `intake.py` (`_get_or_create_emergency_consent`) relies on HIPAA's emergency-treatment exception for hard-stop referrals; legal/compliance should review this before launch.
 - Field-level encryption (the `PHI:encrypted` fields noted in `models.py`) is not yet wired to a KMS-backed `EncryptedType` — that's the next piece of the security blueprint to implement before any real PHI is stored.
 - No BAAs are signed yet with any infrastructure or third-party vendor. Don't put real client data in this system until they are.
+- The typed-signature ROI consent (`hash_typed_signature` in `security.py`) is a placeholder — replace with a real e-signature vendor (DocuSign/HelloSign) before collecting real consent documents.
+- The Stripe integration only implements webhook *signature verification and reconciliation* (`billing.py`); nothing yet calls the Stripe API to actually create a PaymentIntent or Checkout Session — that's the other half of a real integration.
+- There is no self-service endpoint yet for a registered client to complete their `Client` profile (assign a coach, set date of birth, etc.) or for a church to self-onboard — both are currently created directly (seed script / admin-only `POST /church`). A `PATCH /clients/me` (or similar) onboarding flow is the natural next piece of work before a real user could complete signup end to end.

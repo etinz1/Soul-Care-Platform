@@ -288,6 +288,25 @@ class PrayerRequest(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class CrmNote(Base):
+    """
+    Coaching CRM notes (ARCHITECTURE.md §7 step 8) — a coach's general
+    caseload note about a client, independent of any specific scheduled
+    session (unlike `session_notes`, which always hangs off a session).
+    `coach_id` is nullable so a platform admin can log a note before a
+    coach is assigned; `created_by` always identifies the actual author.
+    """
+
+    __tablename__ = "crm_notes"
+
+    id = uuid_pk()
+    client_id = Column(UUID(as_uuid=True), ForeignKey("clients.id"), nullable=False)
+    coach_id = Column(UUID(as_uuid=True), ForeignKey("coaches.id"), nullable=True)
+    encrypted_content = Column(Text, nullable=False)  # PHI:encrypted
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class ScriptureTag(Base):
     __tablename__ = "scripture_tags"
 

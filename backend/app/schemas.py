@@ -452,3 +452,51 @@ class InvoiceResponse(BaseModel):
     status: str
     stripe_payment_intent_id: Optional[str] = None
     issued_at: datetime
+
+
+# --- Coaching CRM ---
+
+
+class ClientRosterEntry(BaseModel):
+    client_id: UUID
+    coach_id: Optional[UUID] = None
+    church_sponsor_id: Optional[UUID] = None
+    created_at: datetime
+
+
+class CrmNoteCreateRequest(BaseModel):
+    content: str = Field(..., min_length=1)
+
+
+class CrmNoteResponse(BaseModel):
+    note_id: UUID
+    client_id: UUID
+    coach_id: Optional[UUID] = None
+    content: str
+    created_by: UUID
+    created_at: datetime
+
+
+class ClientSummaryResponse(BaseModel):
+    """
+    The coach's operational view of a client. Deliberately excludes
+    note_type=clinical session notes, PHQ-9/GAD-7 scores, raw intake
+    responses, and risk events entirely — those stay behind the
+    provider/admin-only surfaces in api/v1/scheduling_sessions.py and
+    api/v1/intake.py. See ARCHITECTURE.md §4's `/crm` comment: "coach view,
+    excludes clinical note_type."
+    """
+
+    client_id: UUID
+    coach_id: Optional[UUID] = None
+    church_sponsor_id: Optional[UUID] = None
+    created_at: datetime
+    latest_intake_submitted_at: Optional[datetime] = None
+    presenting_concerns: list[str] = Field(default_factory=list)
+    protective_factors: list[str] = Field(default_factory=list)
+    distress_level: Optional[int] = None
+    upcoming_sessions_count: int = 0
+    completed_sessions_count: int = 0
+    open_prayer_requests_count: int = 0
+    recent_session_notes: list[SessionNoteResponse] = Field(default_factory=list)
+    recent_crm_notes: list[CrmNoteResponse] = Field(default_factory=list)
