@@ -334,3 +334,121 @@ class PrayerRequestUpdateRequest(BaseModel):
         if self.status is None and self.assigned_to is None:
             raise ValueError("Provide at least one of status or assigned_to.")
         return self
+
+
+# --- Church + sponsorship + billing ---
+
+
+class ChurchCreateRequest(BaseModel):
+    """Admin-only provisioning: churches are onboarded by platform staff, not self-service
+    (there is no public /church/register — see ARCHITECTURE.md §4's API surface)."""
+
+    name: str = Field(..., min_length=1)
+    tax_id: Optional[str] = None
+    billing_email: Optional[EmailStr] = None
+    primary_contact_user_id: Optional[UUID] = Field(
+        None, description="Must reference an existing user with role=church_admin"
+    )
+
+
+class ChurchResponse(BaseModel):
+    church_id: UUID
+    name: str
+    billing_email: Optional[str] = None
+    primary_contact_user_id: Optional[UUID] = None
+    created_at: datetime
+
+
+class SponsorshipCreateRequest(BaseModel):
+    """
+    A church can only sponsor a client it has an ROI consent to be
+    disclosed to (`consent_id`) — mirrors the referral module's
+    consent-gating in api/v1/referrals.py, since a sponsorship reveals to
+    the church that this client is receiving care.
+    """
+
+    client_id: UUID
+    church_id: UUID
+    consent_id: UUID
+    sponsor_type: str = Field("full", description="full | partial | per_session")
+    sessions_covered: int = Field(0, ge=0)
+    amount_covered_cents: int = Field(0, ge=0)
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+
+    @field_validator("sponsor_type")
+    @classmethod
+    def valid_sponsor_type(cls, v):
+        if v not in ("full", "partial", "per_session"):
+            raise ValueError("sponsor_type must be one of full, partial, per_session")
+        return v
+
+
+class SponsorshipResponse(BaseModel):
+    sponsorship_id: UUID
+    church_id: UUID
+    client_id: UUID
+    sponsor_type: str
+    sessions_covered: int
+    amount_covered_cents: int
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    status: str
+
+
+class SponsorshipUpdateRequest(BaseModel):
+    status: Optional[str] = Field(None, description="active | ended | suspended")
+    end_date: Optional[datetime] = None
+
+    @field_validator("status")
+    @classmethod
+    def valid_sponsorship_status(cls, v):
+        if v is not None and v not in ("active", "ended", "suspended"):
+            raise ValueError("status must be one of active, ended, suspended")
+        return v
+
+    @model_validator(mode="after")
+    def at_least_one_sponsorship_field(self):
+        if self.status is None and self.end_date is None:
+            raise ValueError("Provide at least one of status or end_date.")
+        return self
+
+
+class InvoiceLineItem(BaseModel):
+    """
+    Deliberately narrow: session date/count/amount ONLY. There is no field
+    here for a diagnosis, a note, or any other clinical detail — this is
+    the structural half of "billing without clinical visibility"
+    (ARCHITECTURE.md §3); the other half is that `churches` has no FK path
+    to `intake_assessments`, `risk_events`, or `session_notes` at all.
+    """
+
+    session_id: Optional[UUID] = None
+    session_date: Optional[datetime] = None
+    description: str = Field(..., min_length=1)
+    amount_cents: int = Field(..., ge=0)
+
+
+class InvoiceCreateRequest(BaseModel):
+    church_id: Optional[UUID] = None
+    client_id: Optional[UUID] = None
+    sponsorship_id: Optional[UUID] = None
+    line_items: list[InvoiceLineItem] = Field(..., min_length=1)
+
+    @model_validator(mode="after")
+    def bills_someone(self):
+        if self.church_id is None and self.client_id is None:
+            raise ValueError("An invoice must be billed to a church, a client, or both.")
+        return self
+
+
+class InvoiceResponse(BaseModel):
+    invoice_id: UUID
+    sponsorship_id: Optional[UUID] = None
+    church_id: Optional[UUID] = None
+    client_id: Optional[UUID] = None
+    line_items: list[dict]
+    amount_cents: int
+    status: str
+    stripe_payment_intent_id: Optional[str] = None
+    issued_at: datetime
