@@ -230,7 +230,8 @@ async def submit_intake(
 
     # --- 4. Scripture automation (runs regardless of risk outcome) ---
     suppress_sync = result.severity == "imminent"
-    scripture_result = scripture_engine.dispatch(
+    scripture_result = await scripture_engine.dispatch(
+        db,
         client_id=client.id,
         presenting_concerns=payload.presenting_concerns,
         intake_id=intake.id,

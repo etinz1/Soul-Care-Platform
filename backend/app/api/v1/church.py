@@ -130,6 +130,20 @@ async def create_church(
     return _church_to_response(church)
 
 
+@router.get("/me", response_model=ChurchResponse)
+async def get_my_church(
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(UserRole.church_admin)),
+):
+    """Self-service equivalent of GET /clients/me and GET /providers/me — a
+    church_admin's own church record, so their dashboard can show a name and
+    church_id without already knowing it."""
+    church = await _get_own_church_as_admin(db, current_user)
+    if church is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No church found for this account")
+    return _church_to_response(church)
+
+
 @router.get("", response_model=list[ChurchResponse])
 async def list_churches(
     db: AsyncSession = Depends(get_db_session),

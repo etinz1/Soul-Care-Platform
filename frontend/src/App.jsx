@@ -4,6 +4,7 @@ import { AuthProvider } from "./context/AuthContext.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import IntakePage from "./pages/IntakePage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
+import ProviderOnboardingPage from "./pages/ProviderOnboardingPage.jsx";
 import RegisterPage from "./pages/RegisterPage.jsx";
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/provider-onboarding" element={<ProviderOnboardingPage />} />
 
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<DashboardPage />} />

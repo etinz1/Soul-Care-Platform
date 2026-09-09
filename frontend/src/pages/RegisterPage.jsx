@@ -117,6 +117,12 @@ export default function RegisterPage() {
               Sign in
             </Link>
           </p>
+          <p className="text-xs text-center text-slate-400">
+            Clinical provider?{" "}
+            <Link to="/provider-onboarding" className="underline hover:text-slate-600">
+              Apply here
+            </Link>
+          </p>
         </form>
       </div>
     </div>

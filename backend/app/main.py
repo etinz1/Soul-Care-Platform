@@ -15,6 +15,7 @@ from app.api.v1.prayer_requests import router as prayer_requests_router
 from app.api.v1.providers import router as providers_router
 from app.api.v1.referrals import router as referrals_router
 from app.api.v1.scheduling_sessions import router as scheduling_sessions_router
+from app.api.v1.scripture import router as scripture_router
 
 app = FastAPI(title="Soul Care Platform API", version="0.1.0")
 
@@ -52,6 +53,7 @@ app.include_router(church_router, prefix="/api/v1")
 app.include_router(billing_router, prefix="/api/v1")
 app.include_router(crm_router, prefix="/api/v1")
 app.include_router(coaches_router, prefix="/api/v1")
+app.include_router(scripture_router, prefix="/api/v1")
 
 
 @app.get("/healthz")

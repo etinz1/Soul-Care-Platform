@@ -234,3 +234,35 @@ async def test_full_referral_flow_and_role_scoped_listing(client, db_session):
         json={"status": "declined"},
     )
     assert respond_again.status_code == 409
+
+
+async def test_referral_response_surfaces_roi_consent_scope(client, db_session):
+    """A provider deciding accept/decline needs to see what the client
+    actually authorized, not just that some consent exists — this is the
+    gap a codebase audit flagged: ReferralResponse used to carry no
+    consent/scope information at all."""
+    client_user, client_row = await _make_client_user(db_session)
+    provider_user, provider = await _make_provider(db_session, "scope-visible-psych@example.com")
+
+    consent = await client.post(
+        "/api/v1/consents/roi",
+        headers=_auth(client_user),
+        json={
+            "client_id": str(client_row.id),
+            "discloses_to_provider_id": str(provider.id),
+            "scope": {"clinical_summary": True, "session_notes": False},
+            "typed_signature_name": "Jane Client",
+        },
+    )
+    consent_id = consent.json()["consent_id"]
+
+    created = await client.post(
+        "/api/v1/referrals",
+        headers=_auth(client_user),
+        json={"client_id": str(client_row.id), "provider_id": str(provider.id), "consent_id": consent_id},
+    )
+    assert created.json()["consent_id"] == consent_id
+    assert created.json()["roi_scope"] == {"clinical_summary": True, "session_notes": False}
+
+    provider_list = await client.get("/api/v1/referrals", headers=_auth(provider_user))
+    assert provider_list.json()[0]["roi_scope"] == {"clinical_summary": True, "session_notes": False}

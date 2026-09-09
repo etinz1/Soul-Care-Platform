@@ -138,8 +138,22 @@ export const schedulingApi = {
   createSessionNote: (sessionId, payload) =>
     apiRequest(`/api/v1/scheduling/sessions/${sessionId}/notes`, { method: "POST", body: payload }),
   listPrayerRequests: () => apiRequest("/api/v1/scheduling/prayer-requests"),
+  createPrayerRequest: (payload) =>
+    apiRequest("/api/v1/scheduling/prayer-requests", { method: "POST", body: payload }),
   updatePrayerRequest: (prayerRequestId, patch) =>
     apiRequest(`/api/v1/scheduling/prayer-requests/${prayerRequestId}`, { method: "PATCH", body: patch }),
+};
+
+// --- Scripture deliveries (client's own dashboard content) ---
+export const scriptureApi = {
+  listDeliveries: () => apiRequest("/api/v1/scripture/deliveries"),
+};
+
+// --- ROI consent (client signs before requesting a non-crisis referral) ---
+export const consentsApi = {
+  create: (payload) => apiRequest("/api/v1/consents/roi", { method: "POST", body: payload }),
+  get: (consentId) => apiRequest(`/api/v1/consents/roi/${consentId}`),
+  revoke: (consentId) => apiRequest(`/api/v1/consents/roi/${consentId}/revoke`, { method: "POST" }),
 };
 
 // --- Coaching CRM (coach's own caseload; admin sees all) ---
@@ -153,7 +167,12 @@ export const crmApi = {
 
 // --- Clinical providers (vetting + self-service) ---
 export const providersApi = {
+  // Public self-onboarding — no auth token yet, mirrors authApi.register.
+  onboard: (payload) => doFetch("/api/v1/providers/onboard", { method: "POST", body: payload, auth: false }),
   getMe: () => apiRequest("/api/v1/providers/me"),
+  // Client-facing browse list for requesting a referral — approved +
+  // accepting providers only, no email/vetting-status exposed.
+  directory: () => apiRequest("/api/v1/providers/directory"),
   // Admin-only vetting queue; pass "pending" to filter, or omit for all.
   list: (vettingStatus) =>
     apiRequest(`/api/v1/providers${vettingStatus ? `?vetting_status=${vettingStatus}` : ""}`),
@@ -170,6 +189,7 @@ export const coachesApi = {
 // --- Referral marketplace ---
 export const referralsApi = {
   list: () => apiRequest("/api/v1/referrals"),
+  create: (payload) => apiRequest("/api/v1/referrals", { method: "POST", body: payload }),
   respond: (referralId, decisionStatus) =>
     apiRequest(`/api/v1/referrals/${referralId}/respond`, { method: "PATCH", body: { status: decisionStatus } }),
 };
@@ -178,6 +198,9 @@ export const referralsApi = {
 export const churchApi = {
   list: () => apiRequest("/api/v1/church"),
   create: (payload) => apiRequest("/api/v1/church", { method: "POST", body: payload }),
+  // Self-service for a church_admin — their own church's id/name.
+  getMe: () => apiRequest("/api/v1/church/me"),
+  listSponsorships: () => apiRequest("/api/v1/church/sponsorships"),
 };
 
 // --- Billing (admin creates; churches/clients read via churchApi-adjacent routes) ---

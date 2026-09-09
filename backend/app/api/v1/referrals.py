@@ -25,7 +25,8 @@ from app.schemas import ReferralCreateRequest, ReferralRespondRequest, ReferralR
 router = APIRouter(prefix="/referrals", tags=["referrals"])
 
 
-def _to_response(referral: Referral) -> ReferralResponse:
+async def _to_response(db: AsyncSession, referral: Referral) -> ReferralResponse:
+    consent = await db.get(RoiConsent, referral.consent_id)
     return ReferralResponse(
         referral_id=referral.id,
         client_id=referral.client_id,
@@ -33,6 +34,8 @@ def _to_response(referral: Referral) -> ReferralResponse:
         referral_type=referral.referral_type,
         status=referral.status.value,
         created_at=referral.created_at,
+        consent_id=referral.consent_id,
+        roi_scope=(consent.scope if consent is not None else {}),
     )
 
 
@@ -91,7 +94,7 @@ async def create_referral(
         phi_accessed=True,
     )
     await db.commit()
-    return _to_response(referral)
+    return await _to_response(db, referral)
 
 
 @router.get("", response_model=list[ReferralResponse])
@@ -122,7 +125,7 @@ async def list_referrals(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Role not permitted to list referrals")
 
     referrals = (await db.execute(stmt)).scalars().all()
-    return [_to_response(r) for r in referrals]
+    return [await _to_response(db, r) for r in referrals]
 
 
 @router.patch("/{referral_id}/respond", response_model=ReferralResponse)
@@ -155,4 +158,4 @@ async def respond_to_referral(
         phi_accessed=True,
     )
     await db.commit()
-    return _to_response(referral)
+    return await _to_response(db, referral)

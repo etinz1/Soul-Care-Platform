@@ -95,6 +95,30 @@ async def test_list_churches_is_admin_only(client, db_session):
     assert church.name in names
 
 
+async def test_get_my_church_returns_own_church_for_church_admin(client, db_session):
+    """GET /church/me — the self-service lookup the church_admin dashboard
+    uses to find its own church_id/name, mirroring GET /clients/me and
+    GET /providers/me."""
+    church_admin, church = await _make_church_admin_and_church(db_session)
+
+    resp = await client.get("/api/v1/church/me", headers=_auth(church_admin))
+    assert resp.status_code == 200
+    assert resp.json()["church_id"] == str(church.id)
+    assert resp.json()["name"] == church.name
+
+
+async def test_get_my_church_404_for_church_admin_with_no_church(client, db_session):
+    unaffiliated = await _make_user(db_session, "no-church-admin@example.com", UserRole.church_admin)
+    resp = await client.get("/api/v1/church/me", headers=_auth(unaffiliated))
+    assert resp.status_code == 404
+
+
+async def test_get_my_church_forbidden_for_non_church_admin(client, db_session):
+    platform_admin = await _make_user(db_session, "pa-me-check@example.com", UserRole.platform_admin)
+    resp = await client.get("/api/v1/church/me", headers=_auth(platform_admin))
+    assert resp.status_code == 403
+
+
 # --- Sponsorships ---
 
 

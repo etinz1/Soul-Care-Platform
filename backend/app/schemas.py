@@ -111,6 +111,20 @@ class ScriptureCard(BaseModel):
     translation: str = "ESV"
 
 
+class ScriptureDeliveryResponse(BaseModel):
+    """A single persisted scripture_deliveries row, joined with its
+    scripture_content — see services/scripture_engine.py and
+    api/v1/scripture.py's GET /scripture/deliveries."""
+
+    delivery_id: UUID
+    reference: str
+    verse_text: str
+    reflection_text: Optional[str] = None
+    translation: str = "ESV"
+    channel: str
+    delivered_at: Optional[datetime] = None
+
+
 class IntakeSubmitResponse(BaseModel):
     intake_id: UUID
     status: str
@@ -174,6 +188,18 @@ class ProviderOnboardResponse(BaseModel):
     vetting_status: str
     accepting_referrals: bool
     tokens: TokenResponse
+
+
+class ProviderDirectoryEntry(BaseModel):
+    """The client-facing view of a provider — deliberately narrower than
+    ProviderSummary (no email, no raw vetting_status) since this is shown to
+    any client browsing for a referral, not just platform staff. Only
+    approved + accepting providers are ever returned in this shape — see
+    GET /providers/directory."""
+
+    provider_id: UUID
+    provider_type: str
+    license_state: str
 
 
 class ProviderSummary(BaseModel):
@@ -245,6 +271,12 @@ class ReferralResponse(BaseModel):
     referral_type: str
     status: str
     created_at: datetime
+    consent_id: UUID
+    # The ROI consent's scope, surfaced here so a provider deciding whether
+    # to accept a referral can see what the client actually authorized
+    # disclosing — without this, "accept/decline" was a blind decision. See
+    # ConsentResponse.scope / api/v1/consents.py for how scope is created.
+    roi_scope: dict = Field(default_factory=dict)
 
 
 class ReferralRespondRequest(BaseModel):

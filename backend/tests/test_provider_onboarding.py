@@ -120,6 +120,48 @@ async def test_accepting_referrals_forced_false_unless_approved(client, db_sessi
     assert resp.json()["accepting_referrals"] is False
 
 
+async def test_directory_only_shows_approved_accepting_providers(client, db_session):
+    """GET /providers/directory is the client-facing browse-for-a-referral
+    list — narrower than the admin GET /providers, and must never leak a
+    pending/rejected provider's existence to a client."""
+    pending = await client.post(
+        "/api/v1/providers/onboard", json={**ONBOARD_PAYLOAD, "email": "pending-dr@example.com", "license_number": "OK-LIC-9002"}
+    )
+    assert pending.status_code == 201
+    pending_provider_id = pending.json()["provider_id"]
+
+    admin = await _make_admin(db_session)
+    await client.patch(
+        f"/api/v1/providers/{pending_provider_id}/vetting",
+        json={"vetting_status": "approved", "accepting_referrals": True},
+        headers=_auth_header(admin),
+    )
+
+    still_pending = await client.post(
+        "/api/v1/providers/onboard", json={**ONBOARD_PAYLOAD, "email": "still-pending-dr@example.com", "license_number": "OK-LIC-9003"}
+    )
+    assert still_pending.status_code == 201
+
+    client_reg = await client.post(
+        "/api/v1/auth/register", json={"email": "directory-browser@example.com", "password": "correcthorsebattery"}
+    )
+    client_headers = {"Authorization": f"Bearer {client_reg.json()['access_token']}"}
+
+    directory = await client.get("/api/v1/providers/directory", headers=client_headers)
+    assert directory.status_code == 200
+    entries = directory.json()
+    assert len(entries) == 1
+    assert entries[0]["provider_id"] == pending_provider_id
+    assert "email" not in entries[0]
+    assert "vetting_status" not in entries[0]
+
+
+async def test_directory_forbidden_for_non_client_role(client, db_session):
+    admin = await _make_admin(db_session)
+    resp = await client.get("/api/v1/providers/directory", headers=_auth_header(admin))
+    assert resp.status_code == 403
+
+
 async def test_provider_can_fetch_own_profile_via_me(client):
     """GET /providers/me lets a provider discover their own provider_id and
     vetting status right after login, without already knowing provider_id —

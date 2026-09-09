@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { authApi, clearTokens, getStoredTokens, storeTokens } from "../api/client.js";
+import { authApi, clearTokens, getStoredTokens, providersApi, storeTokens } from "../api/client.js";
 
 const AuthContext = createContext(null);
 
@@ -45,6 +45,17 @@ export function AuthProvider({ children }) {
     return tokens;
   }, []);
 
+  // Provider self-onboarding (POST /providers/onboard) returns its tokens
+  // nested under `tokens` rather than at the top level like login/register —
+  // see ProviderOnboardResponse in backend/app/schemas.py — so this can't
+  // just reuse `register` above.
+  const onboardProvider = useCallback(async (payload) => {
+    const result = await providersApi.onboard(payload);
+    storeTokens(result.tokens);
+    setAccessToken(result.tokens.access_token);
+    return result;
+  }, []);
+
   const logout = useCallback(async () => {
     const { refreshToken } = getStoredTokens();
     if (refreshToken) await authApi.logout(refreshToken);
@@ -68,7 +79,7 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const value = { user, initializing, login, register, logout, isAuthenticated: Boolean(user) };
+  const value = { user, initializing, login, register, onboardProvider, logout, isAuthenticated: Boolean(user) };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -20,7 +20,13 @@ from app.audit import write_audit_log
 from app.auth import get_current_user, require_role
 from app.db import get_db_session
 from app.models import ClinicalProvider, ProviderType, User, UserRole, VettingStatus
-from app.schemas import ProviderOnboardRequest, ProviderOnboardResponse, ProviderSummary, TokenResponse
+from app.schemas import (
+    ProviderDirectoryEntry,
+    ProviderOnboardRequest,
+    ProviderOnboardResponse,
+    ProviderSummary,
+    TokenResponse,
+)
 from app.security import create_access_token, create_refresh_token, hash_password
 from app.redis_client import allow_refresh_token
 
@@ -139,6 +145,31 @@ async def get_vetting_status(
         vetting_status=provider.vetting_status.value,
         accepting_referrals=provider.accepting_referrals,
     )
+
+
+@router.get("/directory", response_model=list[ProviderDirectoryEntry])
+async def list_directory_providers(
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role(UserRole.client)),
+):
+    """
+    The client-facing half of GET /providers (admin-only, above): a client
+    requesting a non-crisis referral needs to browse providers currently
+    open to one, but should see only enough to choose — never a fellow
+    provider's email or raw vetting status. Always filtered to
+    approved + accepting_referrals, so a client can never discover a
+    pending or rejected provider exists.
+    """
+    stmt = (
+        select(ClinicalProvider)
+        .where(ClinicalProvider.vetting_status == VettingStatus.approved)
+        .where(ClinicalProvider.accepting_referrals.is_(True))
+    )
+    providers = (await db.execute(stmt)).scalars().all()
+    return [
+        ProviderDirectoryEntry(provider_id=p.id, provider_type=p.provider_type.value, license_state=p.license_state)
+        for p in providers
+    ]
 
 
 @router.get("", response_model=list[ProviderSummary])
